@@ -10,7 +10,7 @@ import socket
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Configuraciones de red
 socket.setdefaulttimeout(60)  # Timeout global de socket
@@ -28,7 +28,7 @@ app = FastAPI()
 # Middleware CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Considera restringir esto en producción
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,7 +41,7 @@ LLM_SERVER_URL = os.environ.get("LLM_SERVER_URL", "http://localhost:3335")
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(
         connect=30.0,   # Timeout de conexión
-        read=120.0,      # Timeout de lectura
+        read=120.0,     # Timeout de lectura
         write=30.0,     # Timeout de escritura
         pool=30.0       # Timeout de pool
     ),
@@ -55,9 +55,9 @@ class Query(BaseModel):
     """
     Modelo para las solicitudes a la API.
     """
-    prompt: str
-    model: str = "mistral:7b"  # Modelo por defecto
-    stream: Optional[bool] = True
+    prompt: str = Field(..., description="El prompt para generar texto.")
+    model: str = Field("mistral:7b", description="El modelo a utilizar.")
+    stream: Optional[bool] = Field(True, description="Si se debe usar streaming.")
 
 async def robust_stream_handler(
     prompt: str,
@@ -172,6 +172,18 @@ async def generate_text(query: Query):
         return JSONResponse(
             status_code=e.status_code,
             content={"detail": str(e.detail)}
+        )
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decodificando JSON: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Error decodificando JSON"}
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Error de comunicación: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Error de comunicación con el servidor LLM"}
         )
     except Exception as e:
         logger.error(f"Error inesperado: {e}")
