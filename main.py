@@ -41,7 +41,7 @@ LLM_SERVER_URL = os.environ.get("LLM_SERVER_URL", "http://localhost:3335")
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(
         connect=30.0,   # Timeout de conexión
-        read=60.0,      # Timeout de lectura
+        read=120.0,      # Timeout de lectura
         write=30.0,     # Timeout de escritura
         pool=30.0       # Timeout de pool
     ),
@@ -98,29 +98,14 @@ async def robust_stream_handler(
                         detail=f"Error al conectar con el servidor LLM: {response.status_code}"
                     )
 
-                buffer = ""
-                async for chunk in response.aiter_text():
-                    buffer += chunk
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        line = line.strip()
-
-                        if line:
-                            try:
-                                data = json.loads(line)
-                                if "response" in data:
-                                    yield data["response"]
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Error decodificando JSON: {e}")
-
-                # Procesar cualquier contenido restante
-                if buffer.strip():
+                # Procesar la respuesta en fragmentos de tamaño fijo (por ejemplo, 1024 caracteres)
+                async for chunk in response.aiter_bytes(chunk_size=1024):
                     try:
-                        data = json.loads(buffer)
+                        data = json.loads(chunk.decode())
                         if "response" in data:
                             yield data["response"]
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Error decodificando JSON: {e}")
 
                 break  # Salir del bucle de reintentos si el streaming es exitoso
 
