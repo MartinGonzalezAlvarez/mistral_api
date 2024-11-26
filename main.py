@@ -35,7 +35,7 @@ app.add_middleware(
 )
 
 # Obtener la URL del servidor LLM desde una variable de entorno
-LLM_SERVER_URL = os.environ.get("LLM_SERVER_URL", "http://localhost:11434")
+LLM_SERVER_URL = os.environ.get("LLM_SERVER_URL", "http://localhost:3335")
 
 # Cliente HTTP configurado globalmente
 client = httpx.AsyncClient(
