@@ -60,8 +60,8 @@ class Query(BaseModel):
     stream: Optional[bool] = True
 
 async def robust_stream_handler(
-    prompt: str, 
-    model: str = "mistral:7b", 
+    prompt: str,
+    model: str = "mistral:7b",
     max_retries: int = 3
 ) -> AsyncGenerator[str, None]:
     """
@@ -85,7 +85,7 @@ async def robust_stream_handler(
 
             async with client.stream("POST", url, json=payload) as response:
                 if response.status_code != 200:
-                    error_text = await response.atext()
+                    error_text = await response.text()
                     logger.error(f"Error de streaming: {response.status_code} - {error_text}")
                     raise HTTPException(
                         status_code=response.status_code,
@@ -98,7 +98,7 @@ async def robust_stream_handler(
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
                         line = line.strip()
-                        
+
                         if line:
                             try:
                                 data = json.loads(line)
@@ -106,7 +106,7 @@ async def robust_stream_handler(
                                     yield data["response"]
                             except json.JSONDecodeError as e:
                                 logger.warning(f"Error decodificando JSON: {e}")
-                
+
                 # Procesar cualquier contenido restante
                 if buffer.strip():
                     try:
@@ -115,7 +115,7 @@ async def robust_stream_handler(
                             yield data["response"]
                     except json.JSONDecodeError:
                         pass
-                
+
                 break  # Salir del bucle de reintentos si el streaming es exitoso
 
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
@@ -125,7 +125,7 @@ async def robust_stream_handler(
             else:
                 logger.error(f"Todos los intentos fallidos: {e}")
                 raise HTTPException(
-                    status_code=500, 
+                    status_code=500,
                     detail=f"Error de comunicación con el servidor LLM después de {max_retries} intentos"
                 )
 
@@ -134,7 +134,7 @@ async def get_generated_text(prompt: str, model: str = "mistral:7b"):
     Obtiene el texto completo generado por Mistral.
     """
     url = f"{LLM_SERVER_URL}/api/generate"
-    
+
     payload = {
         "model": model,
         "prompt": prompt,
@@ -179,17 +179,20 @@ async def generate_text(query: Query):
             return JSONResponse(response)
     except HTTPException as e:
         return JSONResponse(
-            status_code=e.status_code, 
+            status_code=e.status_code,
             content={"detail": str(e.detail)}
         )
     except Exception as e:
         logger.error(f"Error inesperado: {e}")
         return JSONResponse(
-            status_code=500, 
+            status_code=500,
             content={"detail": "Error interno del servidor"}
         )
 
-# Los demás endpoints permanecen igual... 
+# Cerrar el cliente HTTP al finalizar la aplicación
+@app.on_event("shutdown")
+async def shutdown_event():
+    await client.aclose()
 
 if __name__ == "__main__":
     import uvicorn
