@@ -84,7 +84,13 @@ async def robust_stream_handler(
             logger.debug(f"Intento {attempt + 1}: Payload para streaming - {payload}")
 
             async with client.stream("POST", url, json=payload) as response:
-                if response.status_code != 200:
+                if response.status_code == 404:
+                    logger.error(f"Endpoint no encontrado: {response.status_code}")
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Endpoint no encontrado en el servidor LLM: {response.status_code}"
+                    )
+                elif response.status_code != 200:
                     error_text = await response.text()
                     logger.error(f"Error de streaming: {response.status_code} - {error_text}")
                     raise HTTPException(
